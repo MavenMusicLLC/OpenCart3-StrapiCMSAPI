@@ -1,0 +1,82 @@
+{
+  "kind": "collectionType",
+  "collectionName": "bundles",
+  "info": {
+    "singularName": "bundle",
+    "pluralName": "bundles",
+    "displayName": "Bundle",
+    "description": "Product bundles for OpenCart"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "slug": {
+      "type": "string",
+      "required": true,
+      "unique": true
+    },
+    "description": {
+      "type": "text"
+    },
+    "shortDescription": {
+      "type": "string"
+    },
+    "image": {
+      "type": "string"
+    },
+    "images": {
+      "type": "json"
+    },
+    "originalPrice": {
+      "type": "decimal",
+      "required": true
+    },
+    "bundlePrice": {
+      "type": "decimal",
+      "required": true
+    },
+    "discountPercent": {
+      "type": "decimal"
+    },
+    "isActive": {
+      "type": "boolean",
+      "default": true
+    },
+    "stock": {
+      "type": "integer",
+      "default": 0
+    },
+    "sku": {
+      "type": "string"
+    },
+    "products": {
+      "type": "json",
+      "required": true
+    },
+    "categories": {
+      "type": "json"
+    },
+    "metaTitle": {
+      "type": "string"
+    },
+    "metaDescription": {
+      "type": "string"
+    },
+    "sortOrder": {
+      "type": "integer",
+      "default": 0
+    },
+    "validFrom": {
+      "type": "datetime"
+    },
+    "validTo": {
+      "type": "datetime"
+    }
+  }
+}
