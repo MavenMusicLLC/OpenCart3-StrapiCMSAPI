@@ -14,64 +14,60 @@
 **A premium product bundle system for OpenCart 3.x, powered by a Strapi v5 headless CMS.**  
 Create fixed, dynamic, tiered, and mix-and-match bundles — managed centrally and delivered via REST + GraphQL.
 
-[Quick Start](#-quick-start) · [Architecture](#-architecture) · [API Reference](#-api-reference) · [Troubleshooting](#-troubleshooting)
+[Branch Guide](#-branch-guide) · [Architecture](#-architecture) · [Deployment](#-plesk-git-deployment) · [API Reference](#-api-reference) · [Troubleshooting](#-troubleshooting)
 
 </div>
 
 ---
 
-## 📐 Architecture
+## 🌿 Branch Guide
 
-This project uses **two Git branches** deploying to **two separate domains** via Plesk Git:
+This repository has **three branches**, each purpose-built for a different hosting scenario:
 
-```
-                         ┌─────────────────────────┐
-                         │      GitHub Repo         │
-                         │  MavenMusicLLC/          │
-                         │  OpenCart3-StrapiCMSAPI  │
-                         └────────┬────────┬────────┘
-                                  │        │
-                    branch: main  │        │  branch: strapi-api
-                                  ▼        ▼
-               ┌──────────────────┐      ┌──────────────────────┐
-               │  oc.domain.com   │      │  oc-api.domain.com   │
-               │  OpenCart Store  │ ───► │  Strapi CMS API      │
-               │  + Bundle Module │ REST │  Port 1337           │
-               └──────────────────┘      └──────────┬───────────┘
-                                                     │
-                                              ┌──────▼──────┐
-                                              │   MySQL DB   │
-                                              └─────────────┘
-```
-
-| Branch | Domain | Purpose | Deploy Script |
-|--------|--------|---------|---------------|
-| `main` | `oc.yourdomain.com` | OpenCart store + Bundle Module | `.plesk/post-deploy-opencart` |
-| `strapi-api` | `oc-api.yourdomain.com` | Strapi CMS REST + GraphQL API | `.plesk/post-deploy-strapi` |
+| Branch | What it deploys | Deploy script | Use case |
+|--------|----------------|--------------|----------|
+| [`main`](../../tree/main) | **OpenCart Bundle Module only** | `.plesk/post-deploy-opencart` | You already have Strapi on a separate server/domain |
+| [`strapi-api`](../../tree/strapi-api) | **Strapi CMS API only** | `.plesk/post-deploy-strapi` | Strapi runs on its own subdomain (`oc-api.yourdomain.com`) |
+| [`bundled`](../../tree/bundled) | **OpenCart + Strapi together** | `.plesk/post-deploy-bundled` | Both run on one domain (Strapi proxied under `/api`) |
 
 ---
 
-## ⚡ Quick Start
+## 📐 Architecture
 
-### Prerequisites
+### Option A — Separated (2 domains, recommended for production)
+```
+  Branch: main                    Branch: strapi-api
+  oc.yourdomain.com               oc-api.yourdomain.com
+  ┌──────────────────┐            ┌──────────────────────┐
+  │  OpenCart Store  │ ─── REST ──│  Strapi CMS API      │
+  │  + Bundle Module │            │  Port 1337           │
+  └──────────────────┘            └──────────────────────┘
+```
 
-| Requirement | Minimum | Notes |
-|-------------|---------|-------|
-| OpenCart | 3.0.3.2+ | Already installed on your domain |
-| PHP | 7.4+ | With `mysqli`, `curl`, `json`, `mbstring` |
-| Node.js | 18+ | Install via Plesk Node.js extension |
-| MySQL | 8.0+ | Or MariaDB 10.5+ |
-| Plesk | Obsidian 18+ | With Git and Node.js extensions |
+### Option B — Bundled (1 domain, great for dev / small installs)
+```
+  Branch: bundled
+  yourdomain.com
+  ┌─────────────────────────────────────────────────┐
+  │  httpdocs/              → OpenCart store        │
+  │  httpdocs/strapi/       → Strapi app files      │
+  │  yourdomain.com/strapi  → Strapi admin (proxy)  │
+  │  yourdomain.com/api     → REST API   (proxy)    │
+  │  yourdomain.com/graphql → GraphQL    (proxy)    │
+  └─────────────────────────────────────────────────┘
+```
 
 ---
 
 ## 🚀 Plesk Git Deployment
 
-> **Important:** Each domain must be **completely empty** (no files, no `.git` folder) before adding a Git repository in Plesk. If your `httpdocs/` folder has existing files, remove them first.
+> **Before you start:** The `httpdocs/` directory for each domain must be **completely empty** (no files, no `.git` folder). Delete everything including hidden files before adding the Git repo in Plesk.
 
-### Step 1 — Deploy OpenCart Bundle Module
+---
 
-In Plesk, go to **Websites & Domains** → `oc.yourdomain.com` → **Git** → **Add Repository**:
+### Deploy Option A — OpenCart Module (`main` branch)
+
+In Plesk → **Websites & Domains** → `oc.yourdomain.com` → **Git** → **Add Repository**:
 
 | Field | Value |
 |-------|-------|
@@ -80,19 +76,18 @@ In Plesk, go to **Websites & Domains** → `oc.yourdomain.com` → **Git** → *
 | Deploy path | `/var/www/vhosts/oc.yourdomain.com/httpdocs/` |
 | Deployment action | `bash .plesk/post-deploy-opencart` |
 
-Click **Deploy**.
-
-**What the script does automatically:**
-- Detects your OpenCart installation
-- Copies all bundle module files into `catalog/` and `admin/`
-- Runs the database migration (`install/migrate.php` or SQL)
-- Adds `STRAPI_API_URL` to your `config.php`
+**What the script does:**
+- Copies `opencart-module/` files into `catalog/` and `admin/`
+- Runs database migration (`install/migrate.php` or `bundle_install.sql`)
+- Adds `STRAPI_API_URL` to `config.php`
 - Clears OpenCart modification cache
-- Fixes Plesk `user:psacln` file ownership and permissions
+- Fixes Plesk `user:psacln` ownership and permissions
 
-### Step 2 — Deploy Strapi CMS API
+---
 
-In Plesk, go to **Websites & Domains** → `oc-api.yourdomain.com` → **Git** → **Add Repository**:
+### Deploy Option A — Strapi API (`strapi-api` branch)
+
+In Plesk → **Websites & Domains** → `oc-api.yourdomain.com` → **Git** → **Add Repository**:
 
 | Field | Value |
 |-------|-------|
@@ -101,85 +96,69 @@ In Plesk, go to **Websites & Domains** → `oc-api.yourdomain.com` → **Git** �
 | Deploy path | `/var/www/vhosts/oc-api.yourdomain.com/httpdocs/` |
 | Deployment action | `bash .plesk/post-deploy-strapi` |
 
-Click **Deploy**.
-
-**What the script does automatically:**
-- Verifies Node.js 18+ is installed
-- Runs `npm ci` (or `npm install`) for dependencies
+**What the script does:**
+- Verifies Node.js 18+
+- Runs `npm ci` to install dependencies
 - Creates `.env` from `.env.example` with **auto-generated secure secrets**
 - Runs `npm run build` to compile the Strapi admin panel
+- Writes `.htaccess` Apache proxy rules
+- Starts Strapi via PM2 (`strapi-oc-api`)
 - Fixes Plesk file ownership and permissions
-- Restarts Strapi via PM2 (if installed)
 
-### Step 3 — Configure Apache Proxy for Strapi
-
-The `strapi-api` branch already includes a `.htaccess` for you. If you need it manually, create `/var/www/vhosts/oc-api.yourdomain.com/httpdocs/.htaccess`:
-
-```apache
-RewriteEngine On
-RewriteBase /
-
-RewriteRule ^admin(/.*)?$          http://127.0.0.1:1337/admin$1          [P,L]
-RewriteRule ^api(/.*)?$            http://127.0.0.1:1337/api$1            [P,L]
-RewriteRule ^graphql(/.*)?$        http://127.0.0.1:1337/graphql$1        [P,L]
-RewriteRule ^uploads(/.*)?$        http://127.0.0.1:1337/uploads$1        [P,L]
-RewriteRule ^content-manager(/.*)?$ http://127.0.0.1:1337/content-manager$1 [P,L]
-RewriteRule ^documentation(/.*)?$  http://127.0.0.1:1337/documentation$1  [P,L]
-
-<IfModule mod_headers.c>
-    RequestHeader set X-Forwarded-Proto "https" env=HTTPS
-    RequestHeader set X-Real-IP %{REMOTE_ADDR}s
-</IfModule>
-```
-
-### Step 4 — Configure Database & Start Strapi
-
-Edit the auto-created `.env` file with your database credentials:
-
+After deploy, edit the database credentials:
 ```bash
 nano /var/www/vhosts/oc-api.yourdomain.com/httpdocs/.env
+pm2 restart strapi-oc-api
 ```
 
-```env
-HOST=0.0.0.0
-PORT=1337
-APP_KEYS=<auto-generated>
-API_TOKEN_SALT=<auto-generated>
-ADMIN_JWT_SECRET=<auto-generated>
-TRANSFER_TOKEN_SALT=<auto-generated>
-JWT_SECRET=<auto-generated>
+---
 
-DATABASE_CLIENT=mysql
-DATABASE_HOST=localhost
-DATABASE_PORT=3306
-DATABASE_NAME=your_strapi_db
-DATABASE_USERNAME=your_db_user
-DATABASE_PASSWORD=your_db_password
-```
+### Deploy Option B — Bundled (`bundled` branch)
 
-Then start Strapi:
+In Plesk → **Websites & Domains** → `yourdomain.com` → **Git** → **Add Repository**:
 
+| Field | Value |
+|-------|-------|
+| Repository URL | `https://github.com/MavenMusicLLC/OpenCart3-StrapiCMSAPI.git` |
+| Branch | `bundled` |
+| Deploy path | `/var/www/vhosts/yourdomain.com/httpdocs/` |
+| Deployment action | `bash .plesk/post-deploy-bundled` |
+
+**What the script does:**
+- Deploys OpenCart Bundle Module (same as `main`)
+- Moves Strapi source into `httpdocs/strapi/`
+- Installs Node.js dependencies inside `strapi/`
+- Creates `strapi/.env` with auto-generated secrets
+- Builds the Strapi admin panel
+- Writes `.htaccess` to proxy `/api`, `/graphql`, `/strapi` → port 1337
+- Starts Strapi via PM2 (`strapi-bundled`)
+- Fixes all permissions
+
+After deploy, edit the database credentials:
 ```bash
-cd /var/www/vhosts/oc-api.yourdomain.com/httpdocs
-npm start
+nano /var/www/vhosts/yourdomain.com/httpdocs/strapi/.env
+pm2 restart strapi-bundled
 ```
 
-### Step 5 — Create Strapi Admin & Seed Data
-
-1. Visit `https://oc-api.yourdomain.com/admin`
-2. Create your first admin account
-3. Seed demo bundles, products, and categories:
-
-```bash
-curl -X POST https://oc-api.yourdomain.com/api/seed
+Access points after bundled deploy:
+```
+https://yourdomain.com/          ← OpenCart storefront
+https://yourdomain.com/strapi    ← Strapi admin panel
+https://yourdomain.com/api       ← REST API
+https://yourdomain.com/graphql   ← GraphQL
 ```
 
-### Step 6 — Activate the Module in OpenCart
+---
 
-1. Log in to OpenCart Admin → **Extensions** → **Extensions** → **Modules**
-2. Find **Bundle Manager** → click **Install**, then **Edit**
-3. Set **API URL** to `https://oc-api.yourdomain.com/api`
-4. Set **Status** to **Enabled**
+## 🔧 First-Time Strapi Setup (both options)
+
+1. Visit your Strapi admin URL and create the first admin account
+2. Seed demo data:
+   ```bash
+   curl -X POST https://your-api-url/api/seed
+   ```
+3. In OpenCart Admin → **Extensions** → **Extensions** → **Modules** → **Bundle Manager** → **Install** → **Edit**
+4. Set **API URL** to your Strapi `/api` URL and set **Status** → **Enabled**
 5. Go to **Design** → **Layouts** → **Product** → add **Bundle Product** to Content Bottom
 
 ---
@@ -188,27 +167,27 @@ curl -X POST https://oc-api.yourdomain.com/api/seed
 
 | Type | How It Works | Example |
 |------|-------------|---------|
-| **Fixed** | Pre-set group of products sold together at a discount | Gaming PC: CPU + GPU + RAM + SSD |
-| **Dynamic** | Customer selects from an approved product pool | Build Your Own Studio Kit |
-| **Tiered** | Discount increases with quantity | Buy 2 = 10% off · Buy 3 = 20% off |
+| **Fixed** | Pre-set group sold together at a discount | Gaming PC: CPU + GPU + RAM + SSD |
+| **Dynamic** | Customer picks from an approved pool | Build Your Own Studio Kit |
+| **Tiered** | Discount grows with quantity | Buy 2 = 10% off · Buy 3 = 20% off |
 | **Mix & Match** | Any combination up to X items for a flat price | Any 3 accessories for $50 |
 
 ---
 
 ## 🔌 API Reference
 
-Base URL: `https://oc-api.yourdomain.com`
+Base URL: your Strapi domain or `yourdomain.com/api` (bundled)
 
 ### Bundles
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/bundles` | List all bundles (supports filters, pagination) |
-| `GET` | `/api/bundles/:id` | Get a single bundle by Strapi ID |
+| `GET` | `/api/bundles` | List all bundles (filters, pagination) |
+| `GET` | `/api/bundles/:id` | Get bundle by Strapi ID |
 | `GET` | `/api/bundles/slug/:slug` | Find bundle by URL slug |
 | `GET` | `/api/bundles/by-product/:productId` | All bundles containing a product |
-| `GET` | `/api/bundles/:id/calculate` | Calculate savings for a bundle |
-| `POST` | `/api/bundles/sync` | Bulk sync bundles from OpenCart |
+| `GET` | `/api/bundles/:id/calculate` | Calculate savings |
+| `POST` | `/api/bundles/sync` | Bulk sync from OpenCart |
 
 ### Products & Categories
 
@@ -218,21 +197,18 @@ Base URL: `https://oc-api.yourdomain.com`
 | `GET` | `/api/products/by-oc-id/:id` | Find by OpenCart product_id |
 | `POST` | `/api/products/sync` | Bulk sync from OpenCart |
 | `GET` | `/api/categories` | List all categories |
-| `GET` | `/api/categories/tree/:parentId` | Category tree |
 | `POST` | `/api/categories/sync` | Bulk sync from OpenCart |
 
 ### System
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/status` | Health check + system info |
+| `GET` | `/api/status` | Health check |
 | `GET` | `/api/stats` | Content statistics |
 | `POST` | `/api/seed` | Seed demo data |
-| `POST` | `/api/seed/reset` | Reset all seeded data |
+| `POST` | `/api/seed/reset` | Reset seeded data |
 
 ### GraphQL
-
-Endpoint: `https://oc-api.yourdomain.com/graphql`
 
 ```graphql
 query {
@@ -252,33 +228,32 @@ query {
 ## 📁 Repository Structure
 
 ```
-OpenCart3-StrapiCMSAPI/          ← main branch
+main branch
 ├── opencart-module/
-│   ├── admin/                   # Admin panel controllers, models, views, language
-│   └── catalog/                 # Frontend controllers, models, views, language
-├── assets/
-│   ├── logo.svg                 # Project banner
-│   └── logo-footer.svg          # Maven Music footer mark
-├── docs/
-│   └── TUTORIAL.md              # Full step-by-step tutorial
+│   ├── admin/               # Admin controllers, models, views, language
+│   └── catalog/             # Frontend controllers, models, views, language
+├── assets/                  # SVG logos and branding
+├── docs/TUTORIAL.md         # Full step-by-step tutorial
 └── .plesk/
-    └── post-deploy-opencart     # Auto-runs on Plesk Git deploy (main branch)
+    └── post-deploy-opencart # ← runs on Plesk Git deploy (main)
 
-strapi-api branch                ← strapi-api branch
-├── src/api/
-│   ├── bundle/                  # Bundle content type (schema, controller, service, routes)
-│   ├── category/                # Category content type
-│   ├── product/                 # Product content type
-│   └── seed/                    # Demo data seeder
-├── config/
-│   ├── database.js              # MySQL configuration
-│   ├── plugins.js               # GraphQL + documentation plugins
-│   └── middlewares.js           # CORS + security headers
-├── .htaccess                    # Apache reverse proxy to port 1337
-├── .env.example                 # Environment variable template
-├── package.json                 # Strapi 5.x dependencies
+strapi-api branch
+├── src/api/                 # Bundle, category, product, seed content types
+├── config/                  # database.js, server.js, plugins.js, middlewares.js
+├── .env.example             # Environment template
+├── package.json             # Strapi 5.x dependencies
 └── .plesk/
-    └── post-deploy-strapi       # Auto-runs on Plesk Git deploy (strapi-api branch)
+    └── post-deploy-strapi   # ← runs on Plesk Git deploy (strapi-api)
+
+bundled branch
+├── opencart-module/         # OpenCart module (same as main)
+├── src/api/                 # Strapi content types (same as strapi-api)
+├── config/                  # Strapi config (same as strapi-api)
+├── .env.example             # Strapi env template
+├── package.json             # Strapi dependencies
+└── .plesk/
+    └── post-deploy-bundled  # ← runs on Plesk Git deploy (bundled)
+                             #   deploys BOTH parts, creates strapi/ subdir
 ```
 
 ---
@@ -287,32 +262,38 @@ strapi-api branch                ← strapi-api branch
 
 | Problem | Cause | Fix |
 |---------|-------|-----|
-| `Deployment path already exists and is not empty` | Old files or `.git` folder in `httpdocs/` | Delete all files in `httpdocs/` including any hidden `.git` folder, then deploy |
-| Module not in Extensions list | Cache not cleared | `rm -rf system/storage/modification/*` then **Extensions → Modifications → Refresh** |
-| `Database table 'oc_bundles' not found` | Migration didn't run | `php install/migrate.php` or run `install/bundle_install.sql` in phpMyAdmin |
-| Strapi won't start | Missing `.env` or wrong DB credentials | Check `.env` exists, verify DB credentials, run `npm start` manually and check output |
-| Strapi admin unreachable | Apache proxy not active or port 1337 blocked | Verify `.htaccess` proxy rules are present; check `curl http://127.0.0.1:1337` on server |
-| Bundles not showing on product page | Module not assigned to layout | **Design → Layouts → Product** → add Bundle Product module to Content Bottom position |
+| `Deployment path already exists and is not empty` | Old files or `.git` in `httpdocs/` | Delete all files including hidden `.git` folder, then re-deploy |
+| Module not in Extensions list | Cache not cleared | `rm -rf system/storage/modification/*` → Extensions → Modifications → Refresh |
+| `Table 'oc_bundles' not found` | Migration didn't run | `php install/migrate.php` or run `bundle_install.sql` in phpMyAdmin |
+| Strapi won't start | Missing `.env` or wrong DB creds | Edit `.env`, verify DB details, run `npm start` manually |
+| Strapi admin unreachable | Apache proxy not active | Verify `.htaccess` proxy rules exist; `curl http://127.0.0.1:1337` on server |
+| Bundles not on product page | Module not assigned to layout | Design → Layouts → Product → add Bundle Product to Content Bottom |
 | `Permission denied` errors | Wrong Plesk file ownership | `chown -R user:psacln /var/www/vhosts/yourdomain.com/httpdocs/catalog/` |
 
-### Useful Debug Commands
+### Useful Commands
 
 ```bash
 # Check Strapi is running
 curl http://127.0.0.1:1337/api/status
 
-# Tail Strapi logs
-tail -f /tmp/strapi-run.log
+# Tail deploy log
+tail -f /tmp/plesk-opencart-deploy.log
+tail -f /tmp/plesk-strapi-deploy.log
+tail -f /tmp/plesk-bundled-deploy.log
 
-# Restart via PM2
+# Restart Strapi (Option A)
 pm2 restart strapi-oc-api
+
+# Restart Strapi (Option B bundled)
+pm2 restart strapi-bundled
 
 # Check OpenCart error log
 tail -f system/storage/logs/error.log
 
-# Re-run deploy script manually
+# Re-run deploy scripts manually
 bash .plesk/post-deploy-opencart
 bash .plesk/post-deploy-strapi
+bash .plesk/post-deploy-bundled
 ```
 
 ---
@@ -321,7 +302,7 @@ bash .plesk/post-deploy-strapi
 
 | Guide | Description |
 |-------|-------------|
-| [docs/TUTORIAL.md](docs/TUTORIAL.md) | Complete end-to-end tutorial with screenshots and examples |
+| [docs/TUTORIAL.md](docs/TUTORIAL.md) | Complete end-to-end tutorial with examples |
 
 ---
 
