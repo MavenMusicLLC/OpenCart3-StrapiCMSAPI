@@ -1,131 +1,204 @@
-# 🛒 OpenCart Product Bundle System with Strapi CMS
-
-<div align="center">
-
-<img src="assets/logo-maven-music.svg" alt="Maven Music Network - OpenCart Bundle System" width="700">
-
-[![OpenCart](https://img.shields.io/badge/OpenCart-3.0.3.2+-1a1a1a?style=for-the-badge&logo=opencart&logoColor=d3b65f&labelColor=0a0a0a)](https://opencart.com)
-[![PHP](https://img.shields.io/badge/PHP-7.4+-1a1a1a?style=for-the-badge&logo=php&logoColor=d3b65f&labelColor=0a0a0a)](https://php.net)
-[![Strapi](https://img.shields.io/badge/Strapi-5.x-1a1a1a?style=for-the-badge&logo=strapi&logoColor=d3b65f&labelColor=0a0a0a)](https://strapi.io)
-[![License](https://img.shields.io/badge/License-GPL--3.0-1a1a1a?style=for-the-badge&logo=gnu&logoColor=d3b65f&labelColor=0a0a0a)](LICENSE)
+# OpenCart Product Bundle System + Strapi CMS
 
 <p align="center">
-  <strong style="color: #d3b65f;">A Premium Product Bundle System for OpenCart 3.x</strong><br>
-  <span style="color: #888;">Create, manage, and sell product bundles with optional Strapi CMS integration</span>
+  <img src="assets/logo.svg" alt="OpenCart Bundle System" width="600">
 </p>
 
-</div>
+<p align="center">
+  <a href="https://opencart.com"><img src="https://img.shields.io/badge/OpenCart-3.0.3.2+-1a1a1a?style=flat-square&logo=opencart&logoColor=d3b65f&labelColor=0a0a0a" alt="OpenCart"></a>
+  <a href="https://php.net"><img src="https://img.shields.io/badge/PHP-7.4+-1a1a1a?style=flat-square&logo=php&logoColor=d3b65f&labelColor=0a0a0a" alt="PHP"></a>
+  <a href="https://strapi.io"><img src="https://img.shields.io/badge/Strapi-5.x-1a1a1a?style=flat-square&logo=strapi&logoColor=d3b65f&labelColor=0a0a0a" alt="Strapi"></a>
+  <a href="https://nodejs.org"><img src="https://img.shields.io/badge/Node.js-18+-1a1a1a?style=flat-square&logo=nodedotjs&logoColor=d3b65f&labelColor=0a0a0a" alt="Node.js"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0-1a1a1a?style=flat-square&logo=gnu&logoColor=d3b65f&labelColor=0a0a0a" alt="License"></a>
+</p>
+
+<p align="center">
+  <strong>A premium product bundle system for OpenCart 3.x with optional Strapi CMS integration.</strong><br>
+  Create, manage, and sell product bundles — fixed, dynamic, tiered, and mix & match.
+</p>
 
 ---
 
-## 🚀 Plesk Git Deployment
-
-### Repository Structure
+## Architecture
 
 ```
-OpenCart3-StrapiCMSAPI/
-├── opencart-module/     # OpenCart Bundle Module
-├── strapi-api/          # Strapi CMS API (branch: strapi-api)
-├── install/             # Installation scripts
-├── docs/                # Documentation
-├── .plesk/              # Plesk auto-deploy scripts
-└── assets/              # Logos & branding
+[Customer] ────── [OpenCart Store] ────── [Strapi API Server]
+                      |                    api-oc.domain.com:1337
+                      |                         |
+                      |                    [MySQL Database]
+                      |
+               [Bundle Module]
+               (frontend + admin)
 ```
 
-### Deploy Options
+Two branches, two domains, one system:
 
-**Option A: OpenCart Only**
-- Branch: `main`
-- Deploy Path: `/var/www/vhosts/yourdomain.com/httpdocs/`
-
-**Option B: OpenCart + Strapi API**
-- Branch 1: `main` → `/var/www/vhosts/yourdomain.com/httpdocs/`
-- Branch 2: `strapi-api` → `/var/www/vhosts/api.yourdomain.com/httpdocs/`
+| Branch | Domain | What It Deploys |
+|--------|--------|-----------------|
+| `main` | `oc.yourdomain.com` | OpenCart Bundle Module |
+| `strapi-api` | `api-oc.yourdomain.com` | Strapi CMS API |
 
 ---
 
-## 🎯 Quick Deploy
+## Plesk Git Deployment (2-Minute Setup)
 
-### Step 1: Add Repository in Plesk Git
+### Prerequisites
 
-1. Go to **Domains** → Select your domain → **Git**
-2. Click **Add Repository**
-3. Enter:
-   ```
-   Repository URL: https://github.com/yourusername/OpenCart3-StrapiCMSAPI.git
-   Branch: main (or strapi-api for API subdomain)
-   ```
-4. Deploy path: `/var/www/vhosts/yourdomain.com/httpdocs/`
-5. Click **Deploy**
+- Plesk Obsidian 18+ with Git extension
+- Node.js 18+ (Plesk Node.js extension)
+- MySQL 8+ / MariaDB 10.5+
+- OpenCart 3.0.3.2+ already installed
 
-### Step 2: Run Post-Deploy Script
+### Step 1 — Deploy OpenCart Module (main branch)
+
+In Plesk, go to **Websites & Domains** -> `oc.yourdomain.com` -> **Git**:
+
+| Setting | Value |
+|---------|-------|
+| Repository | `https://github.com/MavenMusicLLC/OpenCart3-StrapiCMSAPI.git` |
+| Branch | `main` |
+| Deploy Path | `/var/www/vhosts/oc.yourdomain.com/httpdocs/` |
+| Deploy Action | `bash .plesk/post-deploy-opencart` |
+
+Click **Deploy**. The post-deploy script will:
+- Copy module files into your OpenCart installation
+- Run database migrations
+- Fix Plesk file permissions
+- Clear OpenCart cache
+
+### Step 2 — Deploy Strapi API (strapi-api branch)
+
+In Plesk, go to **Websites & Domains** -> `api-oc.yourdomain.com` -> **Git**:
+
+| Setting | Value |
+|---------|-------|
+| Repository | `https://github.com/MavenMusicLLC/OpenCart3-StrapiCMSAPI.git` |
+| Branch | `strapi-api` |
+| Deploy Path | `/var/www/vhosts/api-oc.yourdomain.com/httpdocs/` |
+| Deploy Action | `bash .plesk/post-deploy-strapi` |
+
+Click **Deploy**. The post-deploy script will:
+- Install npm dependencies
+- Auto-generate secure secrets in `.env`
+- Build the Strapi admin panel
+- Fix Plesk permissions
+- Restart via PM2 (if installed)
+
+### Step 3 — Configure Apache Proxy
+
+Add this `.htaccess` to `api-oc.yourdomain.com/httpdocs/`:
+
+```apache
+RewriteEngine On
+RewriteRule ^admin(/.*)?$   http://127.0.0.1:1337/admin$1   [P,L]
+RewriteRule ^api(/.*)?$     http://127.0.0.1:1337/api$1     [P,L]
+RewriteRule ^graphql(/.*)?$ http://127.0.0.1:1337/graphql$1 [P,L]
+RewriteRule ^uploads(/.*)?$ http://127.0.0.1:1337/uploads$1 [P,L]
+```
+
+### Step 4 — Start Strapi & Create Admin
 
 ```bash
-cd /var/www/vhosts/yourdomain.com/httpdocs
-bash .plesk/post-deploy
+cd /var/www/vhosts/api-oc.yourdomain.com/httpdocs
+npm start
 ```
+
+Then visit `https://api-oc.yourdomain.com/admin` to create your admin account.
 
 ---
 
-## 📖 Documentation
+## Bundle Types
 
-| Document | Description | Link |
-|----------|-------------|------|
-| 📘 **Full Tutorial** | Complete step-by-step guide | [docs/TUTORIAL.md](docs/TUTORIAL.md) |
-| 🖥️ **Plesk Guide** | Plesk-specific deployment | [docs/PLESK.md](docs/PLESK.md) |
-| 🔧 **API Reference** | REST API endpoints | [docs/API.md](docs/API.md) |
-
----
-
-## 🏗️ Component Structure
-
-### OpenCart Module (`opencart-module/`)
-```
-opencart-module/
-├── admin/           # Admin panel files
-├── catalog/         # Frontend files
-└── install/         # SQL & migration scripts
-```
-
-### Strapi API (`strapi-api/` branch)
-```
-strapi-api/
-├── config/          # Strapi configuration
-├── src/api/bundle/  # Bundle content type
-├── package.json     # Dependencies
-└── .env.example     # Environment template
-```
+| Type | Description | Example |
+|------|-------------|---------|
+| **Fixed** | Pre-defined product set at a discount | Gaming PC: CPU + GPU + RAM + SSD |
+| **Dynamic** | Customer picks from a pool of products | Build Your Own Box |
+| **Tiered** | Quantity-based pricing tiers | Buy 2 = 10% off, Buy 3 = 20% off |
+| **Mix & Match** | Any X items for a fixed price | Any 3 items for $50 |
 
 ---
 
-## 🔌 API Endpoints (Strapi)
-
-Once Strapi is deployed, your API is available at:
-
-```
-https://api.yourdomain.com/api
-```
+## API Endpoints (Strapi)
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/bundles` | List all bundles |
-| GET | `/api/bundles/:id` | Get bundle by ID |
-| GET | `/api/bundles/by-slug/:slug` | Get by slug |
-| GET | `/api/bundles/by-product/:id` | Find by product |
-| POST | `/api/bundles/sync` | Sync from OpenCart |
+| `GET` | `/api/bundles` | List all bundles |
+| `GET` | `/api/bundles/:id` | Get bundle by ID |
+| `GET` | `/api/bundles/by-slug/:slug` | Get by slug |
+| `GET` | `/api/bundles/by-product/:id` | Find bundles containing a product |
+| `POST` | `/api/bundles/sync` | Sync bundles from OpenCart |
+| `GET` | `/api/status` | Health check |
+| `POST` | `/api/seed` | Seed demo data |
 
 ---
 
-## 📞 Support
+## Repository Structure
 
-- 🌐 Website: [mavenmusic.network](https://mavenmusic.network)
+```
+OpenCart3-StrapiCMSAPI/
+├── opencart-module/          # OpenCart Bundle Module
+│   ├── admin/                # Admin panel files
+│   ├── catalog/              # Frontend files
+│   └── install/              # SQL migrations
+├── src/                      # Strapi API source
+│   └── api/
+│       ├── bundle/           # Bundle content type
+│       ├── category/         # Category content type
+│       ├── product/          # Product content type
+│       └── seed/             # Demo data seeder
+├── config/                   # Strapi configuration
+├── .plesk/                   # Plesk deploy scripts
+│   ├── post-deploy-opencart  # Runs on main branch deploy
+│   └── post-deploy-strapi    # Runs on strapi-api branch deploy
+├── assets/                   # Logos & branding
+│   ├── logo.svg              # Full banner logo
+│   └── logo-footer.svg       # Compact footer logo
+└── docs/                     # Documentation
+    └── TUTORIAL.md           # Full step-by-step tutorial
+```
 
 ---
 
-<div align="center">
+## Quick Commands
 
-**Made with ❤️ by Maven Music Network**
+```bash
+# Seed demo data
+curl -X POST https://api-oc.yourdomain.com/api/seed
 
-**Version 1.0.0** • Compatible with OpenCart 3.0.3.2+
+# Health check
+curl https://api-oc.yourdomain.com/api/status
 
-</div>
+# Sync bundles from OpenCart to Strapi
+curl -X POST https://api-oc.yourdomain.com/api/bundles/sync
+
+# Check Strapi logs
+tail -50 /tmp/strapi-run.log
+
+# Restart Strapi via PM2
+pm2 restart strapi-oc-api
+```
+
+---
+
+## Troubleshooting
+
+| Problem | Solution |
+|---------|----------|
+| Module not showing in Extensions | Clear modification cache: `rm -rf system/storage/modification/*` then refresh |
+| Database table not found | Run `php install/migrate.php` |
+| Permission denied (Plesk) | `chown -R user:psacln catalog/ admin/` |
+| Strapi API not connecting | Check `curl http://localhost:1337` and firewall |
+| Bundles not on product page | Check module is installed and assigned to layout |
+
+---
+
+## Support
+
+- Website: [mavenmusic.network](https://mavenmusic.network)
+- Documentation: [docs/TUTORIAL.md](docs/TUTORIAL.md)
+
+---
+
+<p align="right">
+  <img src="assets/logo-footer.svg" alt="Maven Music Network" width="300">
+</p>
