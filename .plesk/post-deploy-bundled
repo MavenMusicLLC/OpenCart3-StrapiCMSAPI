@@ -1,0 +1,376 @@
+#!/bin/bash
+# ============================================================================
+# Plesk Git Post-Deploy Script — Bundled (OpenCart + Strapi on one domain)
+# ============================================================================
+# Runs after Plesk Git deploys the bundled branch.
+# Deploys the OpenCart Bundle Module AND runs Strapi CMS from a strapi/
+# subdirectory within the same domain httpdocs root.
+#
+# Architecture (single domain):
+#   yourdomain.com/           → OpenCart store
+#   yourdomain.com/strapi/    → Strapi admin UI (proxied from port 1337)
+#   yourdomain.com/api/       → Strapi REST API  (proxied from port 1337)
+#   yourdomain.com/graphql    → Strapi GraphQL   (proxied from port 1337)
+#
+# Plesk Git Setup:
+#   Domain:    yourdomain.com
+#   Branch:    bundled
+#   Deploy To: /var/www/vhosts/yourdomain.com/httpdocs/
+#   Action:    bash .plesk/post-deploy-bundled
+# ============================================================================
+
+set -e
+
+# ── Colours ────────────────────────────────────────────────────────────────
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+# ── Paths ──────────────────────────────────────────────────────────────────
+DEPLOY_DIR="$PWD"
+LOG_FILE="/tmp/plesk-bundled-deploy.log"
+MODULE_DIR="$DEPLOY_DIR/opencart-module"
+STRAPI_DIR="$DEPLOY_DIR/strapi"          # Strapi lives in strapi/ subdir
+
+log()  { echo "[DEPLOY] $(date '+%H:%M:%S')  $1" | tee -a "$LOG_FILE"; }
+ok()   { echo -e "  ${GREEN}✓${NC} $1"; }
+warn() { echo -e "  ${YELLOW}⚠${NC} $1"; }
+err()  { echo -e "  ${RED}✗${NC} $1"; exit 1; }
+info() { echo -e "  ${BLUE}▸${NC} $1"; }
+
+# ── Detect Plesk owner ─────────────────────────────────────────────────────
+detect_owner() {
+    PLESK_OWNER=$(stat -c '%U' "$DEPLOY_DIR" 2>/dev/null || echo "")
+    PLESK_GROUP="psacln"
+    if [ -z "$PLESK_OWNER" ] || [ "$PLESK_OWNER" = "root" ]; then
+        PLESK_OWNER=$(ls -ld /var/www/vhosts/ 2>/dev/null | head -1 | awk '{print $3}')
+    fi
+    log "Plesk owner: ${PLESK_OWNER:-unknown}"
+}
+
+# ============================================================================
+# PART 1 — OpenCart Bundle Module
+# ============================================================================
+
+check_opencart() {
+    log "[OpenCart] Verifying installation..."
+    if [ ! -f "$DEPLOY_DIR/index.php" ] || [ ! -f "$DEPLOY_DIR/config.php" ]; then
+        warn "OpenCart not detected — module files placed but not activated"
+        return 1
+    fi
+    ok "OpenCart installation detected"
+    return 0
+}
+
+install_module_files() {
+    log "[OpenCart] Installing Bundle module files..."
+
+    if [ ! -d "$MODULE_DIR" ]; then
+        err "opencart-module/ directory not found in repository"
+    fi
+
+    [ -d "$MODULE_DIR/catalog" ] && cp -r "$MODULE_DIR/catalog/"* "$DEPLOY_DIR/catalog/" 2>/dev/null && ok "Catalog files copied" || true
+    [ -d "$MODULE_DIR/admin" ]   && cp -r "$MODULE_DIR/admin/"*   "$DEPLOY_DIR/admin/"   2>/dev/null && ok "Admin files copied"   || true
+
+    if [ -d "$MODULE_DIR/install" ]; then
+        mkdir -p "$DEPLOY_DIR/install"
+        cp -r "$MODULE_DIR/install/"* "$DEPLOY_DIR/install/" 2>/dev/null || true
+        ok "Install scripts copied"
+    fi
+}
+
+run_migration() {
+    log "[OpenCart] Running database migration..."
+
+    if [ -f "$DEPLOY_DIR/install/migrate.php" ]; then
+        php "$DEPLOY_DIR/install/migrate.php" 2>&1 | tail -5 && ok "Migration complete" || warn "Migration had warnings"
+    elif [ -f "$DEPLOY_DIR/install/bundle_install.sql" ]; then
+        DB_NAME=$(php -r "include '$DEPLOY_DIR/config.php'; echo DB_DATABASE;" 2>/dev/null || echo "")
+        DB_USER=$(php -r "include '$DEPLOY_DIR/config.php'; echo DB_USERNAME;" 2>/dev/null || echo "")
+        DB_PASS=$(php -r "include '$DEPLOY_DIR/config.php'; echo DB_PASSWORD;" 2>/dev/null || echo "")
+        if [ -n "$DB_NAME" ] && [ -n "$DB_USER" ]; then
+            mysql -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" < "$DEPLOY_DIR/install/bundle_install.sql" 2>/dev/null && \
+                ok "SQL migration applied" || warn "SQL migration failed — table may already exist"
+        fi
+    else
+        warn "No migration script found — skipping"
+    fi
+}
+
+clear_opencart_cache() {
+    log "[OpenCart] Clearing cache..."
+    rm -rf "$DEPLOY_DIR/system/storage/cache"/*       2>/dev/null || true
+    rm -rf "$DEPLOY_DIR/system/storage/modification"/* 2>/dev/null || true
+    ok "Cache cleared"
+}
+
+update_opencart_config() {
+    log "[OpenCart] Configuring Strapi API URL..."
+    local domain
+    domain=$(echo "$DEPLOY_DIR" | grep -oP 'vhosts/\K[^/]+')
+    local api_url="https://${domain}/api"        # Strapi runs under /api on same domain
+
+    if ! grep -q "STRAPI_API_URL" "$DEPLOY_DIR/config.php" 2>/dev/null; then
+        echo ""                                                             >> "$DEPLOY_DIR/config.php"
+        echo "// Bundle Manager — Strapi API (bundled, same domain)"       >> "$DEPLOY_DIR/config.php"
+        echo "define('STRAPI_API_URL', '$api_url');"                       >> "$DEPLOY_DIR/config.php"
+        ok "STRAPI_API_URL set to $api_url"
+    else
+        ok "STRAPI_API_URL already configured"
+    fi
+}
+
+fix_opencart_permissions() {
+    log "[OpenCart] Fixing Plesk permissions..."
+    if [ -n "$PLESK_OWNER" ] && [ "$PLESK_OWNER" != "root" ]; then
+        for dir in \
+            "$DEPLOY_DIR/catalog/controller/module" \
+            "$DEPLOY_DIR/catalog/model/module" \
+            "$DEPLOY_DIR/catalog/view/theme/default/template/module" \
+            "$DEPLOY_DIR/catalog/view/theme/default/template/extension/module" \
+            "$DEPLOY_DIR/catalog/language/en-gb/module" \
+            "$DEPLOY_DIR/catalog/language/en-gb/extension/module" \
+            "$DEPLOY_DIR/admin/controller/module" \
+            "$DEPLOY_DIR/admin/model/module" \
+            "$DEPLOY_DIR/admin/view/module" \
+            "$DEPLOY_DIR/admin/language/en-gb/module"; do
+            [ -d "$dir" ] && chown -R "$PLESK_OWNER:$PLESK_GROUP" "$dir" 2>/dev/null || true
+        done
+        find "$DEPLOY_DIR/catalog" -type d -exec chmod 755 {} \; 2>/dev/null || true
+        find "$DEPLOY_DIR/catalog" -type f -exec chmod 644 {} \; 2>/dev/null || true
+        find "$DEPLOY_DIR/admin" -type d -exec chmod 755 {} \; 2>/dev/null || true
+        find "$DEPLOY_DIR/admin" -type f -exec chmod 644 {} \; 2>/dev/null || true
+        ok "OpenCart permissions fixed"
+    else
+        warn "Could not determine Plesk owner — skipping"
+    fi
+}
+
+# ============================================================================
+# PART 2 — Strapi CMS (runs in strapi/ subdirectory)
+# ============================================================================
+
+setup_strapi_dir() {
+    log "[Strapi] Setting up strapi/ subdirectory..."
+
+    mkdir -p "$STRAPI_DIR"
+
+    # Move Strapi source files into strapi/ subdir (if not already there)
+    for item in src config package.json package-lock.json .env.example; do
+        if [ -e "$DEPLOY_DIR/$item" ] && [ ! -e "$STRAPI_DIR/$item" ]; then
+            mv "$DEPLOY_DIR/$item" "$STRAPI_DIR/"
+            ok "Moved $item → strapi/$item"
+        elif [ -e "$DEPLOY_DIR/$item" ]; then
+            cp -r "$DEPLOY_DIR/$item" "$STRAPI_DIR/"
+            ok "Copied $item → strapi/$item"
+        fi
+    done
+}
+
+check_node() {
+    log "[Strapi] Checking Node.js..."
+    if ! command -v node &>/dev/null; then
+        err "Node.js not found. Install Node.js 18+ via Plesk Node.js extension."
+    fi
+    local ver
+    ver=$(node -e "process.stdout.write(process.versions.node)" 2>/dev/null)
+    local major="${ver%%.*}"
+    if [ "${major:-0}" -lt 18 ]; then
+        err "Node.js 18+ required (found $ver). Upgrade via Plesk Node.js extension."
+    fi
+    ok "Node.js $ver"
+}
+
+install_strapi_deps() {
+    log "[Strapi] Installing Node.js dependencies..."
+    cd "$STRAPI_DIR"
+    if [ -f "package-lock.json" ]; then
+        npm ci --production=false 2>&1 | tail -5
+    else
+        npm install 2>&1 | tail -5
+    fi
+    ok "Dependencies installed"
+    cd "$DEPLOY_DIR"
+}
+
+setup_strapi_env() {
+    log "[Strapi] Setting up .env..."
+    if [ ! -f "$STRAPI_DIR/.env" ]; then
+        if [ -f "$STRAPI_DIR/.env.example" ]; then
+            cp "$STRAPI_DIR/.env.example" "$STRAPI_DIR/.env"
+
+            # Auto-generate secure secrets
+            gen_secret() { node -e "const c=require('crypto');process.stdout.write(c.randomBytes(32).toString('base64'));" 2>/dev/null || openssl rand -base64 32; }
+
+            sed -i "s|APP_KEYS=.*|APP_KEYS=$(gen_secret),$(gen_secret)|"          "$STRAPI_DIR/.env"
+            sed -i "s|API_TOKEN_SALT=.*|API_TOKEN_SALT=$(gen_secret)|"             "$STRAPI_DIR/.env"
+            sed -i "s|ADMIN_JWT_SECRET=.*|ADMIN_JWT_SECRET=$(gen_secret)|"         "$STRAPI_DIR/.env"
+            sed -i "s|TRANSFER_TOKEN_SALT=.*|TRANSFER_TOKEN_SALT=$(gen_secret)|"   "$STRAPI_DIR/.env"
+            sed -i "s|JWT_SECRET=.*|JWT_SECRET=$(gen_secret)|"                     "$STRAPI_DIR/.env"
+
+            ok ".env created with auto-generated secrets"
+            warn "Edit strapi/.env with your database credentials before starting Strapi"
+        else
+            warn ".env.example not found — creating minimal .env"
+            cat > "$STRAPI_DIR/.env" <<ENVEOF
+HOST=0.0.0.0
+PORT=1337
+APP_KEYS=$(node -e "const c=require('crypto');process.stdout.write(c.randomBytes(32).toString('base64'));" 2>/dev/null || openssl rand -base64 32),$(openssl rand -base64 32)
+API_TOKEN_SALT=$(openssl rand -base64 32)
+ADMIN_JWT_SECRET=$(openssl rand -base64 32)
+TRANSFER_TOKEN_SALT=$(openssl rand -base64 32)
+JWT_SECRET=$(openssl rand -base64 32)
+
+DATABASE_CLIENT=mysql
+DATABASE_HOST=localhost
+DATABASE_PORT=3306
+DATABASE_NAME=your_strapi_db
+DATABASE_USERNAME=your_db_user
+DATABASE_PASSWORD=your_db_password
+ENVEOF
+            warn "Edit strapi/.env — fill in your database details"
+        fi
+    else
+        ok ".env already exists — skipping secret generation"
+    fi
+}
+
+build_strapi() {
+    log "[Strapi] Building admin panel..."
+    cd "$STRAPI_DIR"
+    NODE_ENV=production npm run build 2>&1 | tail -10 && ok "Strapi admin panel built" || warn "Build had warnings — check log"
+    cd "$DEPLOY_DIR"
+}
+
+write_htaccess() {
+    log "[Strapi] Writing Apache proxy rules (.htaccess)..."
+    cat > "$DEPLOY_DIR/.htaccess" <<'HTEOF'
+RewriteEngine On
+RewriteBase /
+
+# ── Static OpenCart files ──────────────────────────────────────────────────
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# ── Proxy Strapi routes to port 1337 ──────────────────────────────────────
+RewriteRule ^strapi(/.*)?$            http://127.0.0.1:1337/admin$1            [P,L]
+RewriteRule ^api(/.*)?$               http://127.0.0.1:1337/api$1              [P,L]
+RewriteRule ^graphql(/.*)?$           http://127.0.0.1:1337/graphql$1          [P,L]
+RewriteRule ^uploads(/.*)?$           http://127.0.0.1:1337/uploads$1          [P,L]
+RewriteRule ^content-manager(/.*)?$   http://127.0.0.1:1337/content-manager$1  [P,L]
+RewriteRule ^documentation(/.*)?$     http://127.0.0.1:1337/documentation$1    [P,L]
+
+<IfModule mod_headers.c>
+    RequestHeader set X-Forwarded-Proto "https" env=HTTPS
+    RequestHeader set X-Real-IP %{REMOTE_ADDR}s
+</IfModule>
+HTEOF
+    ok ".htaccess proxy rules written"
+}
+
+fix_strapi_permissions() {
+    log "[Strapi] Fixing Plesk permissions..."
+    if [ -n "$PLESK_OWNER" ] && [ "$PLESK_OWNER" != "root" ]; then
+        chown -R "$PLESK_OWNER:$PLESK_GROUP" "$STRAPI_DIR" 2>/dev/null || true
+        find "$STRAPI_DIR" -type d -exec chmod 755 {} \; 2>/dev/null || true
+        find "$STRAPI_DIR" -type f -exec chmod 644 {} \; 2>/dev/null || true
+        chmod 600 "$STRAPI_DIR/.env" 2>/dev/null || true
+        ok "Strapi permissions fixed"
+    else
+        warn "Could not determine Plesk owner — skipping"
+    fi
+}
+
+restart_strapi() {
+    log "[Strapi] Starting/restarting Strapi..."
+    local app_name="strapi-bundled"
+    if command -v pm2 &>/dev/null; then
+        cd "$STRAPI_DIR"
+        if pm2 list 2>/dev/null | grep -q "$app_name"; then
+            pm2 restart "$app_name" 2>&1 | tail -3
+            ok "Strapi restarted via PM2 ($app_name)"
+        else
+            pm2 start npm --name "$app_name" -- start 2>&1 | tail -3
+            ok "Strapi started via PM2 ($app_name)"
+            pm2 save 2>/dev/null || true
+        fi
+        cd "$DEPLOY_DIR"
+    else
+        warn "PM2 not installed — start Strapi manually:"
+        warn "  cd $STRAPI_DIR && nohup npm start > /tmp/strapi-bundled.log 2>&1 &"
+        warn "  Recommended: npm install -g pm2 && pm2 start npm --name '$app_name' -- start"
+    fi
+}
+
+# ============================================================================
+# MAIN
+# ============================================================================
+
+main() {
+    echo ""
+    echo -e "${CYAN}╔══════════════════════════════════════════════════╗${NC}"
+    echo -e "${CYAN}║   Bundled Deploy — OpenCart + Strapi CMS         ║${NC}"
+    echo -e "${CYAN}║   Single Domain Configuration                    ║${NC}"
+    echo -e "${CYAN}╚══════════════════════════════════════════════════╝${NC}"
+    echo ""
+
+    log "Deploy directory: $DEPLOY_DIR"
+    log "Strapi directory: $STRAPI_DIR"
+    detect_owner
+
+    echo ""
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BLUE}  PART 1 — OpenCart Bundle Module${NC}"
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+
+    if check_opencart; then
+        install_module_files
+        run_migration
+        update_opencart_config
+        clear_opencart_cache
+        fix_opencart_permissions
+    else
+        warn "OpenCart not fully installed — placing module files only"
+        install_module_files
+        fix_opencart_permissions
+    fi
+
+    echo ""
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BLUE}  PART 2 — Strapi CMS API${NC}"
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+
+    setup_strapi_dir
+    check_node
+    install_strapi_deps
+    setup_strapi_env
+    build_strapi
+    write_htaccess
+    fix_strapi_permissions
+    restart_strapi
+
+    echo ""
+    echo -e "${GREEN}╔══════════════════════════════════════════════════╗${NC}"
+    echo -e "${GREEN}║   Bundled Deploy Complete!                       ║${NC}"
+    echo -e "${GREEN}╚══════════════════════════════════════════════════╝${NC}"
+    echo ""
+    log "Next steps:"
+    log "  1. Edit strapi/.env — add your database credentials"
+    log "  2. Restart Strapi: pm2 restart strapi-bundled"
+    log "  3. Create admin:   https://yourdomain.com/strapi"
+    log "  4. Activate module: OpenCart Admin → Extensions → Modules → Bundle Manager"
+    log ""
+    log "URLs:"
+    log "  OpenCart store: https://yourdomain.com"
+    log "  Strapi admin:   https://yourdomain.com/strapi"
+    log "  REST API:       https://yourdomain.com/api"
+    log "  GraphQL:        https://yourdomain.com/graphql"
+    log ""
+    log "Log file: $LOG_FILE"
+}
+
+main
