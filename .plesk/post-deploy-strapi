@@ -3,12 +3,21 @@ export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/p
 DEPLOY_DIR="$PWD"
 cd "$DEPLOY_DIR"
 echo "[deploy] Strapi deployment started"
+
 echo "[deploy] Installing dependencies..."
-/usr/bin/npm install --no-audit --no-fund 2>&1 | tail -5
+/usr/bin/npm install --no-audit --no-fund 2>&1 | tail -3
+
 echo "[deploy] Building Strapi..."
-/usr/bin/npm run build 2>&1 | tail -5
+/usr/bin/npm run build 2>&1 | tail -3
+
 echo "[deploy] Setting permissions..."
 find . -type d -exec chmod 755 {} \; 2>/dev/null || true
 find . -type f -exec chmod 644 {} \; 2>/dev/null || true
-chmod 755 "$DEPLOY_DIR" 2>/dev/null || true
-echo "[deploy] Deployment complete"
+
+echo "[deploy] Starting PM2..."
+cd "$DEPLOY_DIR"
+/usr/bin/pm2 delete strapi 2>/dev/null || true
+/usr/bin/pm2 start package.json --name strapi -- start 2>&1 | tail -5
+/usr/bin/pm2 save 2>/dev/null || true
+
+echo "[deploy] Complete"
