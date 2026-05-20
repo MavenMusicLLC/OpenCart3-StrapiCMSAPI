@@ -2,22 +2,23 @@
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/plesk/php/8.2/bin:$HOME/bin:$PATH"
 DEPLOY_DIR="$PWD"
 cd "$DEPLOY_DIR"
-echo "[deploy] Strapi deployment started"
 
-echo "[deploy] Installing dependencies..."
-/usr/bin/npm install --no-audit --no-fund 2>&1 | tail -3
+echo "[deploy] Strapi deployment"
+echo "[deploy] Directory: $DEPLOY_DIR"
 
-echo "[deploy] Building Strapi..."
-/usr/bin/npm run build 2>&1 | tail -3
+if [ -f "package.json" ]; then
+    echo "[deploy] npm install..."
+    /usr/bin/npm install --no-audit --no-fund 2>&1 | tail -2
+    echo "[deploy] npm build..."
+    /usr/bin/npm run build 2>&1 | tail -2
+fi
 
 echo "[deploy] Setting permissions..."
 find . -type d -exec chmod 755 {} \; 2>/dev/null || true
-find . -type f -exec chmod 644 {} \; 2>/dev/null || true
 
 echo "[deploy] Starting PM2..."
-cd "$DEPLOY_DIR"
 /usr/bin/pm2 delete strapi 2>/dev/null || true
-/usr/bin/pm2 start package.json --name strapi -- start 2>&1 | tail -5
+/usr/bin/pm2 start package.json --name strapi -- start 2>&1 | tail -3
 /usr/bin/pm2 save 2>/dev/null || true
 
 echo "[deploy] Complete"
