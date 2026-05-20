@@ -1,4 +1,4 @@
-export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/bin/bash:/usr/bin:/bin:$PATH"
 #!/bin/bash
 # ============================================================================
 # Plesk Git Post-Deploy Script — Strapi CMS API (strapi-api branch)
@@ -17,7 +17,7 @@ export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
 set -e
 
 # Plesk deploy shell has a restricted PATH — ensure common binaries are found
-export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/bin/bash:/usr/bin:/bin:$PATH"
 
 # ── Colours ────────────────────────────────────────────────────────────────
 RED='\033[0;31m'
