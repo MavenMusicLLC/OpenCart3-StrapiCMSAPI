@@ -1,19 +1,23 @@
 #!/bin/bash
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-DEPLOY_DIR="$(dirname "$SCRIPT_DIR")"
+SCRIPT_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
+DEPLOY_DIR="$SCRIPT_DIR"
+if [ -z "$DEPLOY_DIR" ] || [ ! -d "$DEPLOY_DIR" ]; then
+    DEPLOY_DIR="$(dirname "$(pwd)")"
+fi
 
 echo "[deploy] OpenCart module deployment"
+echo "[deploy] Working dir: $(pwd)"
 echo "[deploy] Script dir: $SCRIPT_DIR"
-echo "[deploy] Deploy dir: $DEPLOY_DIR"
-
-cd "$DEPLOY_DIR" || { echo "[deploy] Error: Cannot cd to $DEPLOY_DIR"; exit 1; }
 
 if [ -f "index.php" ]; then
     echo "[deploy] OpenCart installation detected"
+elif [ -f "../index.php" ]; then
+    cd ..
+    echo "[deploy] OpenCart found in parent dir"
 else
-    echo "[deploy] Warning: index.php not found in $DEPLOY_DIR"
+    echo "[deploy] OpenCart files in current directory"
 fi
 
 echo "[deploy] Done"
