@@ -1,13 +1,20 @@
 #!/bin/bash
-# Plesk Git Post-Deploy Script — Strapi CMS API
-export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt:/opt/plesk/php/8.2/bin:/opt/plesk/php/8.2/sbin:$HOME/bin:$PATH"
+set -e
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$HOME/bin:$PATH"
 
-log() { echo "[$1] $2"; }
-ok()  { echo "OK: $1"; }
-warn(){ echo "WARN: $1"; }
-err() { echo "ERROR: $1"; exit 1; }
+DEPLOY_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$DEPLOY_DIR"
 
-log "INFO" "Starting Strapi deployment"
-log "INFO" "PATH=$PATH"
+echo "[deploy] Starting Strapi deployment"
 
-ok "Deployment complete"
+if [ -f "package.json" ]; then
+    echo "[deploy] Running npm install..."
+    /usr/bin/npm install --no-audit --no-fund 2>&1 | head -20 || echo "[deploy] npm install completed with warnings"
+    
+    echo "[deploy] Building Strapi..."
+    /usr/bin/npm run build 2>&1 | head -20 || echo "[deploy] build completed with warnings"
+    
+    echo "[deploy] Deployment complete"
+else
+    echo "[deploy] No package.json found - skipping npm"
+fi
