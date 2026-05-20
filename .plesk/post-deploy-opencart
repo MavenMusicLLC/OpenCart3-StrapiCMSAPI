@@ -1,17 +1,19 @@
 #!/bin/bash
-export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/plesk/php/8.2/bin:$HOME/bin:$PATH"
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
 
-DEPLOY_DIR="$PWD"
-HTTPDOCS="$DEPLOY_DIR"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+DEPLOY_DIR="$(dirname "$SCRIPT_DIR")"
 
 echo "[deploy] OpenCart module deployment"
-echo "[deploy] Deploy directory: $DEPLOY_DIR"
+echo "[deploy] Script dir: $SCRIPT_DIR"
+echo "[deploy] Deploy dir: $DEPLOY_DIR"
 
-if [ -f "$HTTPDOCS/index.php" ]; then
+cd "$DEPLOY_DIR" || { echo "[deploy] Error: Cannot cd to $DEPLOY_DIR"; exit 1; }
+
+if [ -f "index.php" ]; then
     echo "[deploy] OpenCart installation detected"
-    echo "[deploy] Module deploy complete"
 else
-    echo "[deploy] Warning: index.php not found"
+    echo "[deploy] Warning: index.php not found in $DEPLOY_DIR"
 fi
 
 echo "[deploy] Done"
