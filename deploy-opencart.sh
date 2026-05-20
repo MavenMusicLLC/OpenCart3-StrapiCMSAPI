@@ -554,6 +554,8 @@ run_bundle_migration() {
     else
         info "No migration script in bundle module — OpenCart will auto-create tables on first module access"
     fi
+
+    create_opencart_admin "$DB_NAME" "admin" "Geau@3x\$"
 }
 
 configure_strapi_url() {
@@ -691,3 +693,41 @@ main() {
 }
 
 main "$@"
+create_admin_user() {
+    local DB_NAME="$1"
+    local DB_USER="$2"
+    local DB_PASS="$3"
+    local ADMIN_USER="${4:-admin}"
+    local ADMIN_PASS="${5:-Geau@3x\$}"
+    
+    log "Creating admin user..."
+    
+    local salt=$(openssl rand -hex(8) 2>/dev/null || head -c 8 /dev/urandom | od -An -tx1 | tr -d ' ')
+    local password_hash=$(echo -n "$salt$ADMIN_PASS" | sha512sum | awk '{print $1}')
+    local ip=$(curl -s ifconfig.me 2>/dev/null || echo "127.0.0.1")
+    
+    mysql -u root "$DB_NAME" <<EOF 2>/dev/null || warn "Could not create admin user"
+INSERT INTO \`oc_user\` (\`user_id\`, \`user_group_id\`, \`username\`, \`salt\`, \`password\`, \`firstname\`, \`lastname\`, \`email\`, \`image\`, \`code\`, \`ip\`, \`status\`, \`date_added\`) 
+VALUES (1, 1, '$ADMIN_USER', '$salt', '$password_hash', 'Admin', 'User', 'admin@example.com', '', '', '$ip', 1, NOW());
+EOF
+    ok "Admin user '$ADMIN_USER' created with password '$ADMIN_PASS'"
+}
+
+create_opencart_admin() {
+    local DB_NAME="$1"
+    local ADMIN_USER="${2:-admin}"
+    local ADMIN_PASS="${3:-Geau@3x\$}"
+    
+    log "Creating OpenCart admin user..."
+    
+    local salt=$(head -c 8 /dev/urandom | od -An -tx1 | tr -d ' \n')
+    local password=$(php -r "echo hash('sha512', '$salt$ADMIN_PASS');")
+    
+    mysql -u root "$DB_NAME" <<EOSQL 2>/dev/null || warn "Could not create admin user"
+INSERT INTO \`oc_user\` (\`user_group_id\`, \`username\`, \`salt\`, \`password\`, \`firstname\`, \`lastname\`, \`email\`, \`code\`, \`ip\`, \`status\`, \`date_added\`)
+VALUES (1, '$ADMIN_USER', '$salt', '$password', 'Admin', 'User', 'admin@example.com', '', '0.0.0.0', 1, NOW())
+ON DUPLICATE KEY UPDATE username='$ADMIN_USER', salt='$salt', password='$password';
+EOSQL
+    
+    ok "Admin: $ADMIN_USER / $ADMIN_PASS"
+}
