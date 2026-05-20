@@ -1,3 +1,4 @@
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
 #!/bin/bash
 # ============================================================================
 # Plesk Git Post-Deploy Script — Strapi CMS API (strapi-api branch)
