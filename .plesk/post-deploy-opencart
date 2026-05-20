@@ -1,17 +1,10 @@
 #!/bin/bash
-# Plesk Git Post-Deploy Script — OpenCart Module
-export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt:/opt/plesk/php/8.2/bin:/opt/plesk/php/8.2/sbin:$HOME/bin:$PATH"
-
-log() { echo "LOG: $1"; }
-ok()  { echo "OK: $1"; }
-warn(){ echo "WARN: $1"; }
-
-log "Starting OpenCart module deployment"
-
-if /usr/bin/test -f "index.php"; then
-    ok "OpenCart installation found"
-else
-    warn "OpenCart index.php not found"
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/plesk/php/8.2/bin:$HOME/bin:$PATH"
+DEPLOY_DIR="$PWD"
+cd "$DEPLOY_DIR" 2>/dev/null || DEPLOY_DIR="/var/www/vhosts/$(/usr/bin/basename $DEPLOY_DIR)/httpdocs"
+echo "[deploy] OpenCart module deploy started"
+echo "[deploy] Directory: $DEPLOY_DIR"
+if [ -f "index.php" ]; then
+    echo "[deploy] OpenCart found"
 fi
-
-ok "Deployment complete"
+echo "[deploy] Done"
