@@ -1,27 +1,27 @@
 #!/bin/bash
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
+echo "[deploy] Strapi deployment"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-DEPLOY_DIR="$(dirname "$SCRIPT_DIR")"
-
-echo "[deploy] Strapi deployment"
-echo "[deploy] Directory: $DEPLOY_DIR"
-
-cd "$DEPLOY_DIR" || { echo "[deploy] Error: Cannot cd to $DEPLOY_DIR"; exit 1; }
+cd "$SCRIPT_DIR"
 
 if [ -f "package.json" ]; then
-    echo "[deploy] npm install..."
-    /usr/bin/npm install --no-audit --no-fund 2>&1 | tail -2
-    echo "[deploy] npm build..."
-    /usr/bin/npm run build 2>&1 | tail -2
+    echo "[deploy] Running npm install..."
+    /usr/bin/npm install --no-audit --no-fund 2>&1 | tail -3
+    
+    echo "[deploy] Running npm build..."
+    /usr/bin/npm run build 2>&1 | tail -3
+    
+    echo "[deploy] Setting permissions..."
+    chown -R oc-api.mavenmusic.net_4ovpcqjcgk:psacln .
+    find . -type d -exec chmod 755 {} \; 2>/dev/null || true
+    
+    echo "[deploy] Starting Strapi..."
+    /usr/bin/pm2 delete strapi 2>/dev/null || true
+    /usr/bin/pm2 start node_modules/.bin/strapi --name strapi -- start
+    /usr/bin/pm2 save
+else
+    echo "[deploy] No package.json"
 fi
-
-echo "[deploy] Setting permissions..."
-find . -type d -exec chmod 755 {} \; 2>/dev/null || true
-
-echo "[deploy] Starting PM2..."
-/usr/bin/pm2 delete strapi 2>/dev/null || true
-/usr/bin/pm2 start package.json --name strapi -- start 2>&1 | tail -3
-/usr/bin/pm2 save 2>/dev/null || true
 
 echo "[deploy] Complete"
