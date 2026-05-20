@@ -1,20 +1,12 @@
 #!/bin/bash
-set -e
-export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$HOME/bin:$PATH"
-
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/plesk/php/8.2/bin:$HOME/bin:$PATH"
 DEPLOY_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$DEPLOY_DIR"
-
-echo "[deploy] Starting Strapi deployment"
-
+echo "[deploy] Starting..."
 if [ -f "package.json" ]; then
-    echo "[deploy] Running npm install..."
-    /usr/bin/npm install --no-audit --no-fund 2>&1 | head -20 || echo "[deploy] npm install completed with warnings"
-    
-    echo "[deploy] Building Strapi..."
-    /usr/bin/npm run build 2>&1 | head -20 || echo "[deploy] build completed with warnings"
-    
-    echo "[deploy] Deployment complete"
-else
-    echo "[deploy] No package.json found - skipping npm"
+    echo "[deploy] npm install..."
+    /usr/bin/npm install --no-audit --no-fund
+    echo "[deploy] npm build..."
+    /usr/bin/npm run build
+    echo "[deploy] Done"
 fi
