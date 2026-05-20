@@ -3,25 +3,47 @@ export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
 echo "[deploy] Strapi deployment"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-cd "$SCRIPT_DIR"
+DEPLOY_DIR="$SCRIPT_DIR"
+cd "$DEPLOY_DIR"
 
-if [ -f "package.json" ]; then
-    echo "[deploy] Running npm install..."
-    /usr/bin/npm install --no-audit --no-fund 2>&1 | tail -3
-    
-    echo "[deploy] Running npm build..."
-    /usr/bin/npm run build 2>&1 | tail -3
-    
-    echo "[deploy] Setting permissions..."
-    chown -R oc-api.mavenmusic.net_4ovpcqjcgk:psacln .
-    find . -type d -exec chmod 755 {} \; 2>/dev/null || true
-    
-    echo "[deploy] Starting Strapi..."
-    /usr/bin/pm2 delete strapi 2>/dev/null || true
-    /usr/bin/pm2 start node_modules/.bin/strapi --name strapi -- start
-    /usr/bin/pm2 save
-else
-    echo "[deploy] No package.json"
+# Create required directories
+mkdir -p public/uploads .tmp
+
+# Create MySQL database if not exists
+mysql -u root -e "CREATE DATABASE IF NOT EXISTS strapi_opencart CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci; CREATE USER IF NOT EXISTS 'strapi_user'@'localhost' IDENTIFIED BY 'StrapiPass123'; GRANT ALL PRIVILEGES ON strapi_opencart.* TO 'strapi_user'@'localhost'; FLUSH PRIVILEGES;" 2>/dev/null || true
+
+# Create .env if not exists
+if [ ! -f ".env" ]; then
+    cat > .env << 'ENVEOF'
+HOST=0.0.0.0
+PORT=1337
+APP_KEYS=c3c2cd330b58263d3103fdb2b25861f4,5a923d70fb5f2518efdb88900ddebc91,41d4975a9106c07228a97d02637fea61,719e0b97e212f1a6f1c2ddc4afd4a097
+API_TOKEN_SALT=63510022b18a611d7b9be165fbe8e849
+ADMIN_JWT_SECRET=6a67b13fab4cb3cfa754eb6477aa2667
+TRANSFER_TOKEN_SALT=3fa6ad532c1afca2911980fab283f480
+JWT_SECRET=e22ce0b6753ae22b32d125c3696abf77
+DATABASE_CLIENT=mysql
+DATABASE_HOST=localhost
+DATABASE_PORT=3306
+DATABASE_NAME=strapi_opencart
+DATABASE_USERNAME=strapi_user
+DATABASE_PASSWORD=StrapiPass123
+ENVEOF
 fi
+
+# Set permissions
+chown -R oc-api.mavenmusic.net_4ovpcqjcgk:psacln .
+find . -type d -exec chmod 755 {} \; 2>/dev/null || true
+
+# Install dependencies and build
+if [ -f "package.json" ]; then
+    /usr/bin/npm install --no-audit --no-fund 2>&1 | tail -2
+    /usr/bin/npm run build 2>&1 | tail -2
+fi
+
+# Start Strapi
+/usr/bin/pm2 delete strapi 2>/dev/null || true
+/usr/bin/pm2 start node_modules/.bin/strapi --name strapi -- start
+/usr/bin/pm2 save
 
 echo "[deploy] Complete"
