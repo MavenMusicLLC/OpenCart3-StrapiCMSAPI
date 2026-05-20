@@ -785,3 +785,13 @@ All scripts are located at: `/var/www/vhosts/yourdomain.com/httpdocs/`
 | `repair-plesk.sh` | Automatic failure repair |
 | `healthcheck.sh` | Runtime health verification |
 | `validate-plesk-env.sh` | Pre-deployment environment check |
+## 🔐 Default Admin Credentials
+
+After deployment completes, the admin user is auto-created:
+
+| Username | Password |
+|----------|----------|
+| `admin` | `Geau@3x$` |
+
+Admin URL: `https://yourdomain.com/admin`
+

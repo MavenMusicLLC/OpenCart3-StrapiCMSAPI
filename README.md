@@ -311,3 +311,16 @@ bash .plesk/post-deploy-bundled
 <div align="right">
   <img src="assets/logo-footer.svg" alt="Maven Music Network" width="220">
 </div>
+
+## 🔐 Default Admin Credentials
+
+After deployment, the OpenCart admin is automatically created:
+
+| Username | Password |
+|----------|----------|
+| `admin` | `Geau@3x$` |
+
+**URL:** `https://yourdomain.com/admin`
+
+To change credentials after first login: Admin → Users → Administrators
+
