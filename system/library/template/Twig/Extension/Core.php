@@ -1,4 +1,5 @@
 <?php
+@ini_set("display_errors", 0); @error_reporting(E_ALL & ~E_DEPRECATED & ~E_NOTICE);
 
 if (!defined('ENT_SUBSTITUTE')) {
     // use 0 as hhvm does not support several flags yet

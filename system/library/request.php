@@ -11,6 +11,7 @@
 * Request class
 */
 class Request {
+    public $request;
 	public $get = array();
 	public $post = array();
 	public $cookie = array();

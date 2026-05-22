@@ -1,6 +1,7 @@
 <?php
+error_reporting(E_ALL & ~E_DEPRECATED & ~E_NOTICE & ~E_STRICT); ini_set("display_errors", 0);
 // Error Reporting
-error_reporting(E_ALL);
+//error_reporting(E_ALL);
 
 // Check if SSL
 if ((isset($_SERVER['HTTPS']) && (($_SERVER['HTTPS'] == 'on') || ($_SERVER['HTTPS'] == '1'))) || $_SERVER['SERVER_PORT'] == 443) {
